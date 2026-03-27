@@ -26,6 +26,7 @@ REPOS=(
     "ms-condohome-ai-assistant"
     "ms-condohome-gateway"
     "n8n-nodes-condohome"
+    "portal-condohome-web"
     "assistente-portaria"
     "infra-condohome-sre"
     "infra-condohome-cicd"
