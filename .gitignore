@@ -12,3 +12,8 @@ Thumbs.db
 .env
 .env.*
 !.env.example
+
+# Secrets (NEVER commit real secrets)
+configs/envs/*.secrets
+!configs/envs/secrets.template
+!configs/envs/*.vars

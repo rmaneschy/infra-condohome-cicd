@@ -1,7 +1,20 @@
 ##
-## Template: Spring Boot Microservice CI/CD
-## Copie este arquivo para .github/workflows/ci-cd.yml no repositório do microserviço
+## Template: Spring Boot Microservice CI/CD with GitHub Environments
+## Copie para .github/workflows/ci-cd.yml no repositório do microserviço
 ## Substitua <SERVICE_NAME> pelo nome do serviço (ex: ms-condohome-register)
+##
+## GitHub Environments necessários:
+##   - development   (auto-deploy em push para develop)
+##   - staging       (auto-deploy em push para main/master)
+##   - production    (requer aprovação manual)
+##
+## Environment Variables (configurar em cada environment):
+##   - DEPLOY_URL        URL do servidor de deploy
+##   - SPRING_PROFILE    Profile Spring ativo (dev, staging, prod)
+##
+## Environment Secrets (configurar em cada environment):
+##   - DB_PASSWORD        Senha do banco de dados
+##   - API_KEYS           Chaves de API externas
 ##
 
 name: CI/CD
@@ -12,7 +25,14 @@ on:
   pull_request:
     branches: [main, master]
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
+  # =====================================================
+  # CI - Roda em TODOS os pushes e PRs (sem environment)
+  # =====================================================
   ci:
     name: Build & Test
     runs-on: ubuntu-latest
@@ -36,11 +56,15 @@ jobs:
           path: target/*.jar
           retention-days: 5
 
-  cd:
-    name: Build & Push Docker Image
+  # =====================================================
+  # CD - Development (auto-deploy em push para develop)
+  # =====================================================
+  deploy-development:
+    name: Deploy Development
     needs: ci
-    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+    if: github.ref == 'refs/heads/develop' && github.event_name == 'push'
     runs-on: ubuntu-latest
+    environment: development
     permissions:
       contents: read
       packages: write
@@ -57,11 +81,96 @@ jobs:
       - name: Build JAR
         run: ./mvnw clean package -DskipTests
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+      - uses: docker/setup-buildx-action@v3
 
-      - name: Log in to GHCR
-        uses: docker/login-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: |
+            ghcr.io/rmaneschy/<SERVICE_NAME>:development
+            ghcr.io/rmaneschy/<SERVICE_NAME>:dev-${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # =====================================================
+  # CD - Staging (auto-deploy em push para main/master)
+  # =====================================================
+  deploy-staging:
+    name: Deploy Staging
+    needs: ci
+    if: (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master') && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    environment: staging
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: 'maven'
+
+      - name: Build JAR
+        run: ./mvnw clean package -DskipTests
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: |
+            ghcr.io/rmaneschy/<SERVICE_NAME>:staging
+            ghcr.io/rmaneschy/<SERVICE_NAME>:staging-${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # =====================================================
+  # CD - Production (requer aprovação manual)
+  # =====================================================
+  deploy-production:
+    name: Deploy Production
+    needs: deploy-staging
+    runs-on: ubuntu-latest
+    environment: production
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: 'maven'
+
+      - name: Build JAR
+        run: ./mvnw clean package -DskipTests
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -74,6 +183,7 @@ jobs:
           push: true
           tags: |
             ghcr.io/rmaneschy/<SERVICE_NAME>:latest
+            ghcr.io/rmaneschy/<SERVICE_NAME>:production
             ghcr.io/rmaneschy/<SERVICE_NAME>:${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max

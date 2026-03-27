@@ -1,6 +1,6 @@
 ##
-## CondoHome - Generic Docker Build & Push
-## Para qualquer serviço que precise de imagem Docker
+## CondoHome - Generic Docker Build & Push (Reusable)
+## Using GitHub Environments
 ##
 
 name: Docker Build & Push
@@ -22,14 +22,15 @@ on:
         required: false
         type: string
         default: '.'
+      environment:
+        description: 'GitHub Environment (development, staging, production)'
+        required: true
+        type: string
       platforms:
         description: 'Target platforms'
         required: false
         type: string
         default: 'linux/amd64'
-    secrets:
-      GHCR_TOKEN:
-        required: true
 
 env:
   REGISTRY: ghcr.io
@@ -37,8 +38,9 @@ env:
 
 jobs:
   build-push:
-    name: Build & Push
+    name: Build & Push (${{ inputs.environment }})
     runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
     permissions:
       contents: read
       packages: write
@@ -58,18 +60,20 @@ jobs:
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
-          password: ${{ secrets.GHCR_TOKEN }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Extract metadata
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/${{ inputs.image-name }}
-          tags: |
-            type=ref,event=branch
-            type=ref,event=tag
-            type=sha,prefix=
-            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' }}
+      - name: Determine image tags
+        id: tags
+        run: |
+          ENV="${{ inputs.environment }}"
+          SHORT_SHA="${{ github.sha }}"
+          SHORT_SHA="${SHORT_SHA:0:7}"
+          BASE="${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/${{ inputs.image-name }}"
+          if [ "$ENV" = "production" ]; then
+            echo "tags=${BASE}:latest,${BASE}:production,${BASE}:${SHORT_SHA}" >> $GITHUB_OUTPUT
+          else
+            echo "tags=${BASE}:${ENV},${BASE}:${ENV}-${SHORT_SHA}" >> $GITHUB_OUTPUT
+          fi
 
       - name: Build and push
         uses: docker/build-push-action@v5
@@ -78,7 +82,8 @@ jobs:
           file: ${{ inputs.dockerfile }}
           platforms: ${{ inputs.platforms }}
           push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+          tags: ${{ steps.tags.outputs.tags }}
+          labels: |
+            org.opencontainers.image.environment=${{ inputs.environment }}
           cache-from: type=gha
           cache-to: type=gha,mode=max

@@ -76,13 +76,18 @@ install_workflow() {
 }
 
 install_all() {
-    echo -e "${BLUE}Instalando workflows em todos os repositórios...${NC}"
+    echo -e "${BLUE}Instalando workflows com GitHub Environments em todos os repositórios...${NC}"
     echo ""
-    for repo in "${!REPO_TECH[@]}"; do
+    for repo in $(echo "${!REPO_TECH[@]}" | tr ' ' '\n' | sort); do
         install_workflow "$repo"
     done
     echo ""
-    echo -e "${GREEN}Workflows instalados! Lembre-se de commitar e fazer push.${NC}"
+    echo -e "${GREEN}Workflows instalados!${NC}"
+    echo -e "${YELLOW}Próximos passos:${NC}"
+    echo -e "  1. Commitar e fazer push em cada repositório"
+    echo -e "  2. Criar environments: ./scripts/setup-environments.sh create-envs"
+    echo -e "  3. Configurar variables: ./scripts/setup-environments.sh set-vars <env> <file>"
+    echo -e "  4. Configurar secrets: ./scripts/setup-environments.sh set-secrets <env> <file>"
 }
 
 list_repos() {

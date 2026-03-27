@@ -1,6 +1,6 @@
 ##
-## CondoHome - Node.js CD Pipeline
-## Publish to GitHub Packages (npm registry)
+## CondoHome - Node.js CD Pipeline (Reusable)
+## Publish to GitHub Packages, using GitHub Environments
 ##
 
 name: Node.js CD
@@ -18,14 +18,16 @@ on:
         required: false
         type: string
         default: 'pnpm'
-    secrets:
-      NPM_TOKEN:
+      environment:
+        description: 'GitHub Environment (development, staging, production)'
         required: true
+        type: string
 
 jobs:
   publish:
-    name: Publish to GitHub Packages
+    name: Publish (${{ inputs.environment }})
     runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
     permissions:
       contents: read
       packages: write
@@ -66,4 +68,4 @@ jobs:
             npm publish --access public
           fi
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

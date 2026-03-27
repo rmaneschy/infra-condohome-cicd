@@ -1,7 +1,10 @@
 ##
-## Template: Node.js CI/CD (n8n custom nodes, pacotes npm)
-## Copie este arquivo para .github/workflows/ci-cd.yml no repositório Node
+## Template: Node.js CI/CD with GitHub Environments
+## Copie para .github/workflows/ci-cd.yml no repositório Node
 ## Substitua <PACKAGE_NAME> pelo nome do pacote
+##
+## GitHub Environments necessários:
+##   - development, staging, production
 ##
 
 name: CI/CD
@@ -11,6 +14,10 @@ on:
     branches: [main, master, develop]
   pull_request:
     branches: [main, master]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   ci:
@@ -42,11 +49,45 @@ jobs:
       - name: Test
         run: pnpm run test || true
 
-  publish:
-    name: Publish to GitHub Packages
+  publish-staging:
+    name: Publish (staging)
     needs: ci
-    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+    if: (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master') && github.event_name == 'push'
     runs-on: ubuntu-latest
+    environment: staging
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          registry-url: 'https://npm.pkg.github.com'
+          scope: '@rmaneschy'
+
+      - name: Install & Build
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm run build
+
+      - name: Publish
+        run: pnpm publish --no-git-checks --access public --tag staging
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  publish-production:
+    name: Publish (production)
+    needs: publish-staging
+    runs-on: ubuntu-latest
+    environment: production
     permissions:
       contents: read
       packages: write

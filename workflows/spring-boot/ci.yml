@@ -5,7 +5,7 @@
 ## Uso no repositório do microserviço:
 ##   jobs:
 ##     ci:
-##       uses: rmaneschy/ms-condohome-cicd/.github/workflows/spring-boot-ci.yml@main
+##       uses: rmaneschy/infra-condohome-cicd/.github/workflows/spring-boot-ci.yml@master
 ##       with:
 ##         java-version: '21'
 ##

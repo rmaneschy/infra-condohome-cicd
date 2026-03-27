@@ -1,92 +1,218 @@
-# CondoHome Platform - CI/CD Pipelines
+# infra-condohome-cicd
 
-Este repositório centraliza todos os workflows do GitHub Actions, templates e scripts de automação de CI/CD para a plataforma **CondoHome**.
+Pipelines de CI/CD da plataforma **CondoHome**, organizados por tecnologia e integrados com **GitHub Environments**, **Environment Variables** e **Environment Secrets**.
 
-A abordagem utilizada é a de **Reusable Workflows** (Workflows Reutilizáveis), o que significa que a lógica de build, teste e deploy fica centralizada aqui, e os repositórios dos microserviços apenas "chamam" estes workflows. Isso garante padronização e facilita a manutenção.
+**Desenvolvido por:** Debug Software
+
+---
+
+## Arquitetura de Environments
+
+A plataforma utiliza 3 GitHub Environments com regras de proteção progressivas:
+
+| Environment | Trigger | Proteção | Uso |
+|---|---|---|---|
+| `development` | Push em `develop` | Nenhuma (auto-deploy) | Testes do desenvolvedor |
+| `staging` | Push em `main`/`master` | Branch policy (protected branches) | Validação pré-produção |
+| `production` | Após staging (manual) | Aprovação obrigatória + wait timer 5min | Ambiente de produção |
+
+### Fluxo de Deploy
+
+```
+develop branch ──push──> CI ──> Deploy Development (auto)
+                                     │
+main branch ───push──> CI ──> Deploy Staging (auto)
+                                     │
+                              Deploy Production (aprovação manual)
+```
+
+---
+
+## Environment Variables vs Environment Secrets
+
+### Quando usar Variables (não sensíveis)
+
+Configurações que variam por ambiente mas não são confidenciais:
+
+| Variable | development | staging | production |
+|---|---|---|---|
+| `API_URL` | `http://localhost:8080` | `https://staging-api.condohome.com.br` | `https://api.condohome.com.br` |
+| `SPRING_PROFILE` | `dev` | `staging` | `prod` |
+| `CORS_ALLOWED_ORIGINS` | `http://localhost:3000` | `https://staging.condohome.com.br` | `https://condohome.com.br` |
+| `IMAGE_TAG` | `development` | `staging` | `latest` |
+
+### Quando usar Secrets (sensíveis)
+
+Credenciais e chaves que devem ser protegidas:
+
+| Secret | Descrição | Escopo recomendado |
+|---|---|---|
+| `DB_PASSWORD` | Senha do banco de dados | Environment Secret |
+| `ASAAS_API_KEY` | Chave da API Asaas | Environment Secret |
+| `OPENAI_API_KEY` | Chave da API OpenAI | Environment Secret |
+| `MAIL_PASSWORD` | Senha SMTP | Environment Secret |
+| `EVOLUTION_API_KEY` | Chave Evolution API | Environment Secret |
+| `JWT_SECRET` | Segredo JWT | Environment Secret |
+| `GITHUB_TOKEN` | Token GitHub | Automático (não configurar) |
+
+---
 
 ## Estrutura do Repositório
 
-| Diretório | Descrição |
-|---|---|
-| `workflows/` | Workflows reutilizáveis separados por tecnologia (Spring Boot, React, Python, Node, Docker) |
-| `templates/` | Arquivos `ci-cd.yml` prontos para serem copiados para os repositórios finais |
-| `scripts/` | Scripts de automação para instalar workflows e gerenciar releases |
-| `Makefile` | Atalhos rápidos para os comandos |
+```
+infra-condohome-cicd/
+├── workflows/                    # Reusable workflows (chamados por outros repos)
+│   ├── spring-boot/
+│   │   ├── ci.yml               # CI: Build, Test, Artifacts
+│   │   └── cd.yml               # CD: Build Docker, Push GHCR (com environment)
+│   ├── react/
+│   │   ├── ci.yml               # CI: Lint, Typecheck, Build
+│   │   └── cd.yml               # CD: Docker/Pages (com environment)
+│   ├── python/
+│   │   ├── ci.yml               # CI: Ruff, mypy, pytest
+│   │   └── cd.yml               # CD: Docker Push (com environment)
+│   ├── node/
+│   │   ├── ci.yml               # CI: Lint, Build, Test
+│   │   └── cd.yml               # CD: GitHub Packages (com environment)
+│   └── docker/
+│       └── build-push.yml       # Genérico: Docker multi-platform
+├── templates/                    # Templates prontos para copiar
+│   ├── spring-boot/ci-cd.yml    # CI + Development + Staging + Production
+│   ├── react/ci-cd.yml
+│   ├── python/ci-cd.yml
+│   └── node/ci-cd.yml
+├── configs/
+│   └── envs/
+│       ├── development.vars     # Variables para development
+│       ├── staging.vars         # Variables para staging
+│       ├── production.vars      # Variables para production
+│       └── secrets.template     # Template de secrets (NUNCA preencher aqui)
+├── scripts/
+│   ├── setup-workflows.sh       # Instalar workflows nos repos
+│   ├── setup-environments.sh    # Criar/gerenciar GitHub Environments
+│   └── create-release.sh        # Automação de releases
+└── Makefile                      # Atalhos rápidos
+```
 
-## Tecnologias Suportadas
+---
 
-### 1. Spring Boot (Java 21 + Maven)
-- **CI:** Checkout, Setup JDK 21, Cache Maven, Build, Test, Upload Artifacts
-- **CD:** Build JAR, Setup Docker Buildx, Login GHCR, Build & Push Docker Image (com tags `latest` e `sha`)
+## Quick Start
 
-### 2. React / Vite (Node.js + pnpm)
-- **CI:** Checkout, Setup pnpm, Install, Lint, Type-check, Build, Test
-- **CD:** Build & Push Docker Image para GHCR **ou** Deploy estático para GitHub Pages
-
-### 3. Python (pip / poetry / uv)
-- **CI:** Checkout, Setup Python, Install dependencies, Lint (Ruff), Type-check (mypy), Test (pytest + coverage)
-- **CD:** Build & Push Docker Image para GHCR
-
-### 4. Node.js (n8n custom nodes / npm packages)
-- **CI:** Checkout, Setup pnpm, Install, Lint, Build, Test
-- **CD:** Publish para GitHub Packages (npm registry)
-
-## Como Usar nos Repositórios
-
-Você não precisa copiar a lógica inteira para cada repositório. Basta usar o script de instalação automatizada:
+### 1. Criar Environments em todos os repositórios
 
 ```bash
-# Instalar workflow em um repositório específico
-make install REPO=ms-condohome-register
-
-# Instalar workflows em TODOS os repositórios da plataforma
-make install-all
+make create-envs
 ```
 
-O script irá identificar a tecnologia do repositório, copiar o template correto para `.github/workflows/ci-cd.yml` e substituir os placeholders (como `<SERVICE_NAME>`).
-
-### Exemplo de uso em um microserviço (Spring Boot)
-
-O arquivo `.github/workflows/ci-cd.yml` gerado no repositório ficará assim:
-
-```yaml
-name: CI/CD
-
-on:
-  push:
-    branches: [main, master, develop]
-  pull_request:
-    branches: [main, master]
-
-jobs:
-  ci:
-    uses: rmaneschy/ms-condohome-cicd/.github/workflows/spring-boot-ci.yml@main
-    with:
-      java-version: '21'
-
-  cd:
-    needs: ci
-    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
-    uses: rmaneschy/ms-condohome-cicd/.github/workflows/spring-boot-cd.yml@main
-    with:
-      image-name: ms-condohome-register
-    secrets:
-      GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-```
-
-## Gestão de Releases
-
-Para criar uma release semântica (ex: `v1.0.0`) em qualquer repositório da plataforma, com geração automática de changelog:
+### 2. Configurar Environment Variables
 
 ```bash
-make release REPO=ms-condohome-register VERSION=v1.0.0
+make set-vars-dev        # development
+make set-vars-staging    # staging
+make set-vars-prod       # production
 ```
+
+### 3. Configurar Environment Secrets
+
+```bash
+# Copie o template e preencha com valores reais
+cp configs/envs/secrets.template configs/envs/dev.secrets
+# Edite o arquivo com os valores reais
+make set-secrets ENV=development FILE=configs/envs/dev.secrets
+make set-secrets ENV=staging FILE=configs/envs/staging.secrets
+make set-secrets ENV=production FILE=configs/envs/prod.secrets
+```
+
+### 4. Instalar workflows nos repositórios
+
+```bash
+make install-all         # Instala em todos os repos
+make install REPO=ms-condohome-register  # Instala em um repo específico
+```
+
+### 5. Setup completo (tudo de uma vez)
+
+```bash
+make setup-all
+```
+
+---
+
+## Workflows por Tecnologia
+
+### Spring Boot (JDK 21 + Maven)
+
+Cobre: `register`, `billing`, `documents`, `booking`, `notification`, `finance`, `ai-assistant`, `gateway`
+
+- **CI:** Checkout → Setup JDK 21 → Maven Build & Test → Upload JAR
+- **CD:** Build JAR → Docker Buildx → Push GHCR com tag do environment
+
+### React/Vite (pnpm + Node 22)
+
+Cobre: `assistente-portaria`, `portal-condohome-web`
+
+- **CI:** Checkout → pnpm install → Lint → Typecheck → Build → Upload dist
+- **CD:** Docker Build com `VITE_API_URL` do environment → Push GHCR
+
+### Python (pip/poetry/uv)
+
+Cobre: `ms-condohome-ai-assistant` (componentes Python)
+
+- **CI:** Checkout → pip install → Ruff → mypy → pytest
+- **CD:** Docker Build → Push GHCR
+
+### Node.js (pnpm)
+
+Cobre: `n8n-nodes-condohome`
+
+- **CI:** Checkout → pnpm install → Lint → Build → Test
+- **CD:** Publish no GitHub Packages (npm)
+
+---
 
 ## Container Registry
 
-Todas as imagens Docker são publicadas no **GitHub Container Registry (GHCR)** sob a organização/usuário `rmaneschy`.
+Todas as imagens são publicadas no **GitHub Container Registry (GHCR)**:
 
-Formato da imagem: `ghcr.io/rmaneschy/<nome-do-repo>:<tag>`
+```
+ghcr.io/rmaneschy/<service>:<tag>
+```
+
+Tags por environment:
+
+| Environment | Tag Pattern | Exemplo |
+|---|---|---|
+| development | `development`, `dev-<sha>` | `ghcr.io/rmaneschy/ms-condohome-register:development` |
+| staging | `staging`, `staging-<sha>` | `ghcr.io/rmaneschy/ms-condohome-register:staging` |
+| production | `latest`, `production`, `<sha>` | `ghcr.io/rmaneschy/ms-condohome-register:latest` |
 
 ---
-*Desenvolvido por Debug Software*
+
+## Melhores Práticas
+
+1. **Secrets nunca em código:** Use Environment Secrets para credenciais
+2. **Variables para configuração:** URLs, portas e flags por ambiente
+3. **CI sem environment:** Testes rodam sem acesso a secrets de ambiente
+4. **CD com environment:** Deploy só acontece no contexto do environment
+5. **Production com aprovação:** Requer revisão manual antes do deploy
+6. **Rotação de secrets:** Atualize credenciais a cada 90 dias
+7. **Princípio do menor privilégio:** Cada environment tem apenas os secrets necessários
+8. **`secrets: inherit`:** Use nos reusable workflows para propagar secrets do environment
+
+---
+
+## Comandos Disponíveis
+
+```bash
+make help                # Lista todos os comandos
+make create-envs         # Criar environments em todos os repos
+make set-vars-dev        # Definir variables de development
+make set-vars-staging    # Definir variables de staging
+make set-vars-prod       # Definir variables de production
+make set-secrets         # Definir secrets (ENV=staging FILE=path)
+make env-status          # Status dos environments
+make install-all         # Instalar workflows em todos os repos
+make install             # Instalar em um repo (REPO=...)
+make list                # Listar repos e tecnologias
+make release             # Criar release (REPO=... VERSION=...)
+```

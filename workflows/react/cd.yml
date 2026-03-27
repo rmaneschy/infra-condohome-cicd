@@ -1,6 +1,6 @@
 ##
-## CondoHome - React/Vite CD Pipeline
-## Build Docker image and push to GHCR, or deploy static to GitHub Pages
+## CondoHome - React/Vite CD Pipeline (Reusable)
+## Build Docker image and push to GHCR, using GitHub Environments
 ##
 
 name: React CD
@@ -22,14 +22,15 @@ on:
         required: false
         type: string
         default: 'pnpm'
+      environment:
+        description: 'GitHub Environment (development, staging, production)'
+        required: true
+        type: string
       deploy-target:
         description: 'Deploy target (ghcr, pages)'
         required: false
         type: string
         default: 'ghcr'
-    secrets:
-      GHCR_TOKEN:
-        required: false
 
 env:
   REGISTRY: ghcr.io
@@ -37,9 +38,10 @@ env:
 
 jobs:
   deploy-ghcr:
-    name: Build & Push to GHCR
+    name: Deploy to ${{ inputs.environment }}
     if: inputs.deploy-target == 'ghcr'
     runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
     permissions:
       contents: read
       packages: write
@@ -55,26 +57,32 @@ jobs:
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
-          password: ${{ secrets.GHCR_TOKEN }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Extract metadata
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/${{ inputs.image-name }}
-          tags: |
-            type=ref,event=branch
-            type=ref,event=tag
-            type=sha,prefix=
-            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' }}
+      - name: Determine image tags
+        id: tags
+        run: |
+          ENV="${{ inputs.environment }}"
+          SHORT_SHA="${{ github.sha }}"
+          SHORT_SHA="${SHORT_SHA:0:7}"
+          BASE="${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/${{ inputs.image-name }}"
+          if [ "$ENV" = "production" ]; then
+            echo "tags=${BASE}:latest,${BASE}:production,${BASE}:${SHORT_SHA}" >> $GITHUB_OUTPUT
+          else
+            echo "tags=${BASE}:${ENV},${BASE}:${ENV}-${SHORT_SHA}" >> $GITHUB_OUTPUT
+          fi
 
       - name: Build and push
         uses: docker/build-push-action@v5
         with:
           context: .
           push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+          tags: ${{ steps.tags.outputs.tags }}
+          build-args: |
+            VITE_ENVIRONMENT=${{ inputs.environment }}
+            VITE_API_URL=${{ vars.API_URL }}
+          labels: |
+            org.opencontainers.image.environment=${{ inputs.environment }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -82,12 +90,11 @@ jobs:
     name: Deploy to GitHub Pages
     if: inputs.deploy-target == 'pages'
     runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
     permissions:
       contents: read
       pages: write
       id-token: write
-    environment:
-      name: github-pages
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -108,6 +115,9 @@ jobs:
         run: |
           ${{ inputs.package-manager }} install --frozen-lockfile
           ${{ inputs.package-manager }} run build
+        env:
+          VITE_ENVIRONMENT: ${{ inputs.environment }}
+          VITE_API_URL: ${{ vars.API_URL }}
 
       - name: Upload to Pages
         uses: actions/upload-pages-artifact@v3

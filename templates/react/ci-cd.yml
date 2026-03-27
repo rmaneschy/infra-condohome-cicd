@@ -1,7 +1,19 @@
 ##
-## Template: React/Vite CI/CD
-## Copie este arquivo para .github/workflows/ci-cd.yml no repositório do frontend
+## Template: React/Vite CI/CD with GitHub Environments
+## Copie para .github/workflows/ci-cd.yml no repositório do frontend
 ## Substitua <APP_NAME> pelo nome da aplicação
+##
+## GitHub Environments necessários:
+##   - development   (auto-deploy em push para develop)
+##   - staging       (auto-deploy em push para main/master)
+##   - production    (requer aprovação manual)
+##
+## Environment Variables (configurar em cada environment):
+##   - API_URL           URL base da API Gateway
+##   - VITE_ENVIRONMENT  Nome do ambiente
+##
+## Environment Secrets (configurar em cada environment):
+##   - (nenhum obrigatório para frontends)
 ##
 
 name: CI/CD
@@ -11,6 +23,10 @@ on:
     branches: [main, master, develop]
   pull_request:
     branches: [main, master]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   ci:
@@ -49,27 +65,84 @@ jobs:
           path: dist/
           retention-days: 5
 
-  cd:
-    name: Build & Push Docker Image
+  deploy-development:
+    name: Deploy Development
     needs: ci
-    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+    if: github.ref == 'refs/heads/develop' && github.event_name == 'push'
     runs-on: ubuntu-latest
+    environment: development
     permissions:
       contents: read
       packages: write
     steps:
       - uses: actions/checkout@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Log in to GHCR
-        uses: docker/login-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and push
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: |
+            ghcr.io/rmaneschy/<APP_NAME>:development
+            ghcr.io/rmaneschy/<APP_NAME>:dev-${{ github.sha }}
+          build-args: |
+            VITE_API_URL=${{ vars.API_URL }}
+            VITE_ENVIRONMENT=development
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
+  deploy-staging:
+    name: Deploy Staging
+    needs: ci
+    if: (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master') && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    environment: staging
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and push
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: |
+            ghcr.io/rmaneschy/<APP_NAME>:staging
+            ghcr.io/rmaneschy/<APP_NAME>:staging-${{ github.sha }}
+          build-args: |
+            VITE_API_URL=${{ vars.API_URL }}
+            VITE_ENVIRONMENT=staging
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy-production:
+    name: Deploy Production
+    needs: deploy-staging
+    runs-on: ubuntu-latest
+    environment: production
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
       - name: Build and push
         uses: docker/build-push-action@v5
         with:
@@ -77,6 +150,10 @@ jobs:
           push: true
           tags: |
             ghcr.io/rmaneschy/<APP_NAME>:latest
+            ghcr.io/rmaneschy/<APP_NAME>:production
             ghcr.io/rmaneschy/<APP_NAME>:${{ github.sha }}
+          build-args: |
+            VITE_API_URL=${{ vars.API_URL }}
+            VITE_ENVIRONMENT=production
           cache-from: type=gha
           cache-to: type=gha,mode=max
