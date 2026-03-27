@@ -1,0 +1,118 @@
+##
+## CondoHome - React/Vite CD Pipeline
+## Build Docker image and push to GHCR, or deploy static to GitHub Pages
+##
+
+name: React CD
+
+on:
+  workflow_call:
+    inputs:
+      image-name:
+        description: 'Docker image name'
+        required: true
+        type: string
+      node-version:
+        description: 'Node.js version'
+        required: false
+        type: string
+        default: '22'
+      package-manager:
+        description: 'Package manager'
+        required: false
+        type: string
+        default: 'pnpm'
+      deploy-target:
+        description: 'Deploy target (ghcr, pages)'
+        required: false
+        type: string
+        default: 'ghcr'
+    secrets:
+      GHCR_TOKEN:
+        required: false
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_PREFIX: rmaneschy
+
+jobs:
+  deploy-ghcr:
+    name: Build & Push to GHCR
+    if: inputs.deploy-target == 'ghcr'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GHCR_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/${{ inputs.image-name }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=tag
+            type=sha,prefix=
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy-pages:
+    name: Deploy to GitHub Pages
+    if: inputs.deploy-target == 'pages'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        if: inputs.package-manager == 'pnpm'
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.node-version }}
+          cache: ${{ inputs.package-manager }}
+
+      - name: Install & Build
+        run: |
+          ${{ inputs.package-manager }} install --frozen-lockfile
+          ${{ inputs.package-manager }} run build
+
+      - name: Upload to Pages
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist/
+
+      - name: Deploy to Pages
+        uses: actions/deploy-pages@v4
