@@ -27,7 +27,6 @@ declare -A REPO_TECH=(
     ["ms-condohome-ai-assistant"]="spring-boot"
     ["ms-condohome-gateway"]="spring-boot"
     ["n8n-nodes-condohome"]="node"
-    ["assistente-portaria"]="react"
     ["portal-condohome-web"]="react"
 )
 
