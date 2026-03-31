@@ -6,6 +6,12 @@ Pipelines de CI/CD da plataforma **CondoHome**, organizados por tecnologia e int
 
 ---
 
+## 📚 Documentação
+
+- [Guia de Operacionalização](docs/operationalization.md) - Passo a passo completo, arquitetura e troubleshooting.
+
+---
+
 ## Arquitetura de Environments
 
 A plataforma utiliza 3 GitHub Environments com regras de proteção progressivas:
@@ -93,21 +99,49 @@ infra-condohome-cicd/
 ├── scripts/
 │   ├── setup-workflows.sh       # Instalar workflows nos repos
 │   ├── setup-environments.sh    # Criar/gerenciar GitHub Environments
-│   └── create-release.sh        # Automação de releases
+│   ├── create-release.sh        # Automação de releases
+│   └── validate-requirements.sh # Validação de pré-requisitos
+├── docs/
+│   └── operationalization.md    # Guia de operação
 └── Makefile                      # Atalhos rápidos
 ```
 
 ---
 
+## Validação de Requisitos
+
+Antes de iniciar a operação, valide se seu ambiente possui todas as ferramentas necessárias:
+
+```bash
+# Valida ferramentas locais (gh, jq, make) e autenticação
+make validate CONTEXT=local
+
+# Valida ferramentas do pipeline (docker, java, node)
+make validate CONTEXT=pipeline
+
+# Validação completa (local + acesso a todos os repositórios)
+make validate CONTEXT=full
+```
+
+O script de validação fornece instruções de correção específicas para o seu sistema operacional (Ubuntu, macOS, Windows/WSL, etc).
+
+---
+
 ## Quick Start
 
-### 1. Criar Environments em todos os repositórios
+### 1. Validar Ambiente
+
+```bash
+make validate CONTEXT=local
+```
+
+### 2. Criar Environments em todos os repositórios
 
 ```bash
 make create-envs
 ```
 
-### 2. Configurar Environment Variables
+### 3. Configurar Environment Variables
 
 ```bash
 make set-vars-dev        # development
@@ -115,7 +149,7 @@ make set-vars-staging    # staging
 make set-vars-prod       # production
 ```
 
-### 3. Configurar Environment Secrets
+### 4. Configurar Environment Secrets
 
 ```bash
 # Copie o template e preencha com valores reais
@@ -126,14 +160,14 @@ make set-secrets ENV=staging FILE=configs/envs/staging.secrets
 make set-secrets ENV=production FILE=configs/envs/prod.secrets
 ```
 
-### 4. Instalar workflows nos repositórios
+### 5. Instalar workflows nos repositórios
 
 ```bash
 make install-all         # Instala em todos os repos
 make install REPO=ms-condohome-register  # Instala em um repo específico
 ```
 
-### 5. Setup completo (tudo de uma vez)
+### 6. Setup completo (tudo de uma vez)
 
 ```bash
 make setup-all
@@ -208,6 +242,7 @@ Tags por environment:
 
 ```bash
 make help                # Lista todos os comandos
+make validate            # Valida requisitos (CONTEXT=local|pipeline|full)
 make create-envs         # Criar environments em todos os repos
 make set-vars-dev        # Definir variables de development
 make set-vars-staging    # Definir variables de staging
