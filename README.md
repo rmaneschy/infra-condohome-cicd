@@ -9,6 +9,7 @@ Pipelines de CI/CD da plataforma **CondoHome**, organizados por tecnologia e int
 ## 📚 Documentação
 
 - [Guia de Operacionalização](docs/operationalization.md) - Passo a passo completo, arquitetura e troubleshooting.
+- [Configuração de Novo Repositório](docs/new-repository-setup.md) - Guia passo a passo para integrar um novo repositório à esteira de CI/CD.
 
 ---
 
