@@ -43,10 +43,10 @@ Configurações que variam por ambiente mas não são confidenciais:
 
 | Variable | development | staging | production |
 |---|---|---|---|
-| `API_URL` | `http://localhost:8080` | `https://staging-api.condohome.com.br` | `https://api.condohome.com.br` |
+| `API_URL` | `http://localhost:8000` | `https://staging-api.condohome.com.br` | `https://api.condohome.com.br` |
 | `SPRING_PROFILE` | `dev` | `staging` | `prod` |
 | `CORS_ALLOWED_ORIGINS` | `http://localhost:3000` | `https://staging.condohome.com.br` | `https://condohome.com.br` |
-| `VITE_API_URL` | `http://localhost:8080` | `https://staging-api.condohome.com.br` | `https://api.condohome.com.br` |
+| `VITE_API_URL` | `http://localhost:8000` | `https://staging-api.condohome.com.br` | `https://api.condohome.com.br` |
 | `PORTAL_WEB_DOMAIN` | `localhost:3000` | `staging.condohome.com.br` | `condohome.com.br` |
 | `PORTARIA_DOMAIN` | `localhost:3001` | `staging-portaria.condohome.com.br` | `portaria.condohome.com.br` |
 | `IMAGE_TAG` | `development` | `staging` | `latest` |
@@ -180,7 +180,7 @@ make setup-all
 
 ### Spring Boot (JDK 21 + Maven)
 
-Cobre: `register`, `billing`, `documents`, `booking`, `notification`, `finance`, `ai-assistant`, `gateway`
+Cobre: `register`, `billing`, `documents`, `booking`, `notification`, `finance`, `ai-assistant`
 
 - **CI:** Checkout → Setup JDK 21 → Maven Build & Test → Upload JAR
 - **CD:** Build JAR → Docker Buildx → Push GHCR com tag do environment

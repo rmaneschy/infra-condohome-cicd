@@ -25,7 +25,6 @@ declare -A REPO_TECH=(
     ["ms-condohome-notification"]="spring-boot"
     ["ms-condohome-finance"]="spring-boot"
     ["ms-condohome-ai-assistant"]="spring-boot"
-    ["ms-condohome-gateway"]="spring-boot"
     ["n8n-nodes-condohome"]="node"
     ["portal-condohome-web"]="react"
 )
